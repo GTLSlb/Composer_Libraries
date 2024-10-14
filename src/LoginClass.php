@@ -73,21 +73,12 @@ final class LoginClass
                     ->post("$tokenURL" . "Token", $TokenBody);
 
                 $user = $responseData[0];
-                // if($responseData[0]['TypeId'] == 1) // the user is a customer
-                // {
-                //     $user = new Customer($responseData[0]);
-                // }else if($responseData[0]['TypeId'] == 2) // the user is an employee
-                // {
-                //     $user = new Employee($responseData[0]);
-                // }
-                // else{ // the user is a driver
-                //     $user = new Driver($responseData[0]);
-                // }
+
                 if ($tokenRes->successful()) {
                     $token = $tokenRes->json();
                     $cookieName = 'access_token';
                     $cookieValue = $token['access_token'];
-                    setcookie($name, '', 1, '/', $sessionDomain, true);
+                    setcookie($cookieName, $cookieValue, 1, '/', $sessionDomain, true);
                     $userId = $user['UserId'];
                     $request->session()->regenerate();
                     $request->session()->put('user', $user);
@@ -210,53 +201,45 @@ final class LoginClass
         }
     }
 
-    public function logoutWithoutRequest(Request $request)
+ public function logoutWithoutRequest(Request $request)
     {
         $parameters = request()->all();
         $sessionDomain = $parameters['SessionDomain'] ?? '/';
-        $user = $parameters['CurrentUser'];
 
-        // Retrieve the 'access_token' cookie
-        $token = isset($_COOKIE['access_token']) ? $_COOKIE['access_token'] : null;
+        try{
 
-        // Create an instance of the RegisteredUserController and get the current user
-        $stringifiedUser = json_encode($user);
-        $userMsg = json_decode($stringifiedUser, true);
+        // Invalidate and flush the session
+        $request->session()->invalidate();
+        $request->session()->flush();
+
+        // Regenerate the session token
+        $request->session()->regenerateToken();
+
+        // Set the expiration time for the cookies to a past date (January 1, 1970)
+        $expiration = time() - 3600;
+        $cookies = $_COOKIE;
+
+        $_COOKIE['access_token'] = '';
+        // Loop through each cookie and set it to expire
+        foreach ($cookies as $name => $value) {
+            setcookie($name, '', $expiration, '/', $sessionDomain, true);
+        }
 
         //check if user is not found
-        if (gettype($userMsg) != "array" && gettype($userMsg) != "object" && gettype($userMsg) == "string") {
-            if ($userMsg['message'] == 'User not found') {
-
-                $request->session()->invalidate();
-                $request->session()->flush();
-                // Set the expiration time for the cookies to 1/1/1970
-                $expiration = 1;
-                $cookies = $_COOKIE;
-
-                // Loop through each cookie and set it to expire
-                foreach ($cookies as $name => $value) {
-                    setcookie($name, '', $expiration, '/', $sessionDomain, true);
-                }
-                $request->session()->regenerateToken();
-            }
-        } else {
-            // Invalidate and flush the session
+        if ($request->session()->has('user')) {
+            //Remove user from session
             $request->session()->forget('user');
-            $request->session()->invalidate();
-            $request->session()->flush();
-            // Set the expiration time for the cookies to 1/1/1970
-            $expiration = 1;
+        }
 
-            // Get an array of all the cookies
-            $cookies = $_COOKIE;
+        return response()->json([
+            'message' => 'Logout Successfully',
+        ], 200);
 
-            // Loop through each cookie and set it to expire
-            foreach ($cookies as $name => $value) {
-                setcookie($name, '', $expiration, '/', $sessionDomain, true);
-            }
-
-            // Regenerate the session token
-            $request->session()->regenerateToken();
+        }catch(\Exception $e){
+            dd($e);
+            return response()->json([
+                'message' => 'Logout failed. Please try again. ' . $e->getMessage(),
+            ], 500);
         }
     }
 
