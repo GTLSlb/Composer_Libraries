@@ -50,7 +50,7 @@ final class LoginClass
 
                 $credentials = [
                     'EmailInput' => $request->input('Email'),
-                    'EmailDb' => $responseData[0]['Email'],
+                    'EmailDb' => $responseData[0]['Username'],
                     'PasswordDb' => $responseData[0]['UserId'],
                     'PasswordInput' => $request->input('Password'),
                 ];
@@ -125,7 +125,7 @@ final class LoginClass
         $sessionDomain = $parameters['SessionDomain'] ?? '';
         $user = $parameters['CurrentUser'];
         $url = $parameters['URL'];
-        // dd($parameters);
+
         // Retrieve the 'access_token' cookie if available
         $token = $_COOKIE['access_token'] ?? null;
 
@@ -159,7 +159,7 @@ final class LoginClass
 
             // Send the logout request to the external API
             $response = Http::withHeaders($headers)->get($url . "Logout");
-            // dd($response->successful());
+
             // Check if the logout request was successful
             if ($response->successful()) {
 
@@ -236,7 +236,7 @@ final class LoginClass
         ], 200);
 
         }catch(\Exception $e){
-            dd($e);
+
             return response()->json([
                 'message' => 'Logout failed. Please try again. ' . $e->getMessage(),
             ], 500);
@@ -348,10 +348,17 @@ final class LoginClass
                 'user' => $user,
             ]);
         } else {
-            return response()->json([
-                'message' => 'Authentication error: ' . $response->body(),
-            ], 500);
-
+            if(str_contains($response->json()['Message'], 'Error while validating token: Code: InvalidAuthenticationToken')) {
+                return response()->json([
+                    'Message' =>  'Error while validating token: Invalid Authentication Token',
+                    'error' =>  $response->json(),
+                ], 500);
+            }else{
+                return response()->json([
+                    'Message' =>  $response->json()['Message'] ?? 'Authentication error',
+                    'error' =>  $response->json(),
+                ], 500);
+            }
         }
     }
 }
