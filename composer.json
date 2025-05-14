@@ -3,6 +3,8 @@
     "description": "[]",
     "type": "library",
     "license": "MIT",
+    "version": "v1.0.6",
+    "minimum-stability": "stable",
     "authors": [
         {
             "name": "gtls-dev"
