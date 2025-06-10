@@ -26,14 +26,8 @@ final class LoginClass
     {
         $parameters = request()->all();
         $sessionDomain = $parameters['SessionDomain'] ?? '/';
-        $email = $parameters['Email'];
-        $password = $parameters['Password'];
+        $userObject = is_string($parameters['UserObject']) ? json_decode($parameters['UserObject'], true)[0] : $parameters['UserObject'];
         $url = $parameters['URL'];
-
-        $headers = [
-            'Email' => $email,
-            'Password' => $password,
-        ];
 
         // Get an array of all the cookies
         $cookies = $_COOKIE;
@@ -42,25 +36,13 @@ final class LoginClass
         foreach ($cookies as $name => $value) {
             setcookie($name, '', 1, '/', $sessionDomain, true);
         }
-        $response = Http::withHeaders($headers)->get("$url" . "Login");
-        if ($response->successful()) {
-            $responseData = $response->json();
-            if (!empty($responseData)) {
-                // $authProvider = new CustomAuth();
 
-                $credentials = [
-                    'EmailInput' => $request->input('Email'),
-                    'EmailDb' => $responseData[0]['Username'],
-                    'PasswordDb' => $responseData[0]['UserId'],
-                    'PasswordInput' => $request->input('Password'),
-                ];
-
+        if ($userObject != null) {
                 // Generate Token using user id and owner id
                 $user = null;
                 $TokenHeaders = [
-                    'UserId' => $responseData[0]['UserId'],
-                    'OwnerId' => $responseData[0]['OwnerId'],
-                    // 'AppId'=> $appID,
+                    'UserId' => $userObject['UserId'],
+                    'OwnerId' => $userObject['OwnerId'],
                     'Content-Type' => "application/x-www-form-urlencoded",
                 ];
                 $TokenBody = [
@@ -72,7 +54,7 @@ final class LoginClass
                     ->asForm()
                     ->post("$tokenURL" . "Token", $TokenBody);
 
-                $user = $responseData[0];
+                $user = $userObject;
 
                 if ($tokenRes->successful()) {
                     $token = $tokenRes->json();
@@ -112,11 +94,6 @@ final class LoginClass
                     return json_encode(['user' => null, 'request' => $request, 'status' => $statusCode, 'message' => $errorMessage]);
                 }
             }
-        } else {
-            $errorMessage = 'Invalid Credentials';
-            $statusCode = 500;
-            return json_encode(['user' => null, 'request' => $request, 'status' => $statusCode, 'message' => $errorMessage]);
-        }
     }
 
     public function logout(Request $request)
