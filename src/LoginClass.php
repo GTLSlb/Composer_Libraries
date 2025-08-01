@@ -16,18 +16,14 @@ final class LoginClass
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\RedirectResponse
      */
-    public static function index()
-    {
-        $data = (['status' => 200, 'message' => 'Logged in locally. Handle Azure AD login on frontend.']);
-        return json_encode($data);
-    }
 
     public static function login(Request $request)
     {
-        $parameters = request()->all();
+        $parameters = $request()->all();
         $sessionDomain = $parameters['SessionDomain'] ?? '/';
-        $userObject = is_string($parameters['UserObject']) ? json_decode($parameters['UserObject'], true)[0] : $parameters['UserObject'];
-        $url = $parameters['URL'];
+        $userObjectDecode = is_string($parameters['UserObject']) ? json_decode($parameters['UserObject'], true) : $parameters['UserObject'];
+        $userObject = is_array($userObjectDecode) ? $userObjectDecode : [$userObjectDecode]; // Check if the decoded value is an array or a json
+        $token = $parameters['Token'];
 
         // Get an array of all the cookies
         $cookies = $_COOKIE;
@@ -37,74 +33,50 @@ final class LoginClass
             setcookie($name, '', 1, '/', $sessionDomain, true);
         }
 
-        if ($userObject != null) {
-                // Generate Token using user id and owner id
-                $user = null;
-                $TokenHeaders = [
-                    'UserId' => $userObject['UserId'],
-                    'OwnerId' => $userObject['OwnerId'],
-                    'Content-Type' => "application/x-www-form-urlencoded",
-                ];
-                $TokenBody = [
-                    'grant_type' => "password",
-                ];
+        if ($userObject != null && $token != null) {
+            // Generate Token using user id and owner id
+            $userId = $userObject['UserId'];
+            $request->session()->regenerate();
+            $request->session()->put('token', $token);
+            $request->session()->put('user', is_array($userObject) ? json_encode($userObject) : $userObject);
+            $request->session()->put('user_id', $userId);
+            $request->session()->put('newRoute', '/loginapi');
 
-                $tokenURL = $url;
-                $tokenRes = Http::withHeaders($TokenHeaders)
-                    ->asForm()
-                    ->post("$tokenURL" . "Token", $TokenBody);
+            $sessionId = $request->session()->getId();
+            $user = json_encode($userObject);
 
-                $user = $userObject;
-
-                if ($tokenRes->successful()) {
-                    $token = $tokenRes->json();
-                    $cookieName = 'access_token';
-                    $cookieValue = $token['access_token'];
-                    setcookie($cookieName, $cookieValue, 1, '/', $sessionDomain, true);
-                    $userId = $user['UserId'];
-                    $request->session()->regenerate();
-                    $request->session()->put('user', $user);
-                    $request->session()->put('user_id', $userId);
-                    $request->session()->put('newRoute', '/loginapi');
-
-                    $sessionId = $request->session()->getId();
-                    $payload = $request->session()->get('_token');
-                    $userSession = $request->session()->get('user');
-                    $user = json_encode($userSession);
-
-                    $lastActivity = time();
-                    DB::table('custom_sessions')->insert([
-                        'id' => $sessionId,
-                        'user_id' => $userId,
-                        'payload' => $payload,
-                        'user' => $user,
-                        'last_activity' => $lastActivity,
-                        'created_at' => date("Y-m-d H:i:s"),
-                        'updated_at' => date("Y-m-d H:i:s"),
-                    ]);
+            $lastActivity = time();
+            DB::table('custom_sessions')->insert([
+                'id' => $sessionId,
+                'user_id' => $userId,
+                'payload' => $token,
+                'user' => $user,
+                'last_activity' => $lastActivity,
+                'created_at' => \Carbon\Carbon::now(),
+                'updated_at' => \Carbon\Carbon::now(),
+            ]);
 
 
-                    $request->session()->save();
-                    if ($request->session()->get('newRoute') && $request->session()->get('user')) {
-                        return json_encode(['user' => $user, 'request' => $request, 'status' => 200, 'message' => 'Login successful']);
-                    }
-                } else {
-                    $errorMessage = 'Something went wrong, try again later';
-                    $statusCode = 500;
-                    return json_encode(['user' => null, 'request' => $request, 'status' => $statusCode, 'message' => $errorMessage]);
-                }
+            $request->session()->save();
+            if ($request->session()->get('newRoute') && $request->session()->get('user')) {
+                return json_encode(['user' => $user, 'token' => $token, 'request' => $request, 'status' => 200, 'message' => 'Login successful']);
             }
+        } else {
+            $errorMessage = 'Something went wrong, try again later';
+            $statusCode = 500;
+            return json_encode(['user' => null, 'token' => null, 'request' => $request, 'status' => $statusCode, 'message' => $errorMessage]);
+        }
     }
 
     public function logout(Request $request)
     {
-        $parameters = request()->all();
+        $parameters = $request()->all();
         $sessionDomain = $parameters['SessionDomain'] ?? '';
         $user = $parameters['CurrentUser'];
         $url = $parameters['URL'];
 
         // Retrieve the 'access_token' cookie if available
-        $token = $_COOKIE['access_token'] ?? null;
+        // $token = $_COOKIE['access_token'] ?? null;
 
         $stringifiedUser = json_encode($user);
         // Create an instance of the RegisteredUserController and get the current user
@@ -131,7 +103,7 @@ final class LoginClass
             // Set up headers for the API request
             $headers = [
                 'UserId' => $UserId,
-                'Authorization' => "Bearer " . $token,
+                // 'Authorization' => "Bearer " . $token,
             ];
 
             // Send the logout request to the external API
@@ -141,9 +113,9 @@ final class LoginClass
             if ($response->successful()) {
 
                 // Invalidate and flush session data
-                $request->session()->forget('user');
-                $request->session()->invalidate();
-                $request->session()->flush();
+                session()->forget('user');
+                session()->invalidate();
+                session()->flush();
 
                 // Clear cookies to log the user out fully
                 $this->clearAllCookies($sessionDomain);
@@ -178,43 +150,37 @@ final class LoginClass
         }
     }
 
- public function logoutWithoutRequest(Request $request)
+    public function logoutWithoutRequest(Request $request)
     {
-        $parameters = request()->all();
-        $sessionDomain = $parameters['SessionDomain'] ?? '/';
+        // $parameters = request()->all();
+        // $sessionDomain = $parameters['SessionDomain'] ?? '/';
 
-        try{
+        try {
+            //check if user is found
+            if ($request->session()->has('user')) {
+                //Remove user and from session
+                $request->session()->forget('user');
+            }
 
-        // Invalidate and flush the session
-        $request->session()->invalidate();
-        $request->session()->flush();
+            //check if token is found
+            if ($request->session()->has('token')) {
+                //Remove token from session
+                $request->session()->forget('token');
+            }
 
-        // Regenerate the session token
-        $request->session()->regenerateToken();
+            // Invalidate and flush the session
+            $request->session()->invalidate();
+            $request->session()->flush();
 
-        // Set the expiration time for the cookies to a past date (January 1, 1970)
-        $expiration = time() - 3600;
-        $cookies = $_COOKIE;
+            // Regenerate the session token
+            $request->session()->regenerateToken();
 
-        $_COOKIE['access_token'] = '';
-        // Loop through each cookie and set it to expire
-        foreach ($cookies as $name => $value) {
-            setcookie($name, '', $expiration, '/', $sessionDomain, true);
-        }
+            return \Illuminate\Support\Facades\Response::json([
+                'message' => 'Logout Successfully',
+            ], 200);
+        } catch (\Exception $e) {
 
-        //check if user is not found
-        if ($request->session()->has('user')) {
-            //Remove user from session
-            $request->session()->forget('user');
-        }
-
-        return response()->json([
-            'message' => 'Logout Successfully',
-        ], 200);
-
-        }catch(\Exception $e){
-
-            return response()->json([
+            return \Illuminate\Support\Facades\Response::json([
                 'message' => 'Logout failed. Please try again. ' . $e->getMessage(),
             ], 500);
         }
@@ -222,12 +188,12 @@ final class LoginClass
 
     public function handleCallback(Request $request)
     {
-        $parameters = request()->all();
+        $parameters = $request()->all();
         $redirectRoute = $parameters['RedirectRoute'] ?? '/';
         $gtamUrl = $parameters['URL'] ?? '/';
 
-        if (session()->has('user')) {
-            return redirect()->route($redirectRoute);  // Redirect if session exists
+        if (\Illuminate\Support\Facades\Session::has('user')) {
+            return \Illuminate\Support\Facades\Redirect::route($redirectRoute);  // Redirect if session exists
         }
 
         // Proceed with the login flow if the session does not exist
@@ -243,23 +209,24 @@ final class LoginClass
 
             if ($response->successful()) {
                 $responseJson = $response->json();
-                session()->regenerate();
-                session()->put('user', $responseJson);
-                session()->put('user_id', $responseJson['UserId']);
-                session()->put('newRoute', route('azurelogin'));
+
+                \Illuminate\Support\Facades\Session::regenerate();
+                \Illuminate\Support\Facades\Session::put('user', $responseJson);
+                \Illuminate\Support\Facades\Session::put('user_id', $responseJson['UserId']);
+                \Illuminate\Support\Facades\Session::put('newRoute', \Illuminate\Support\Facades\Route::route('azurelogin'));
 
                 // Insert into custom_sessions
                 DB::table('custom_sessions')->insert([
-                    'id' => session()->getId(),
+                    'id' => \Illuminate\Support\Facades\Session::getId(),
                     'user_id' => $responseJson['UserId'],
-                    'payload' => session()->get('_token'),
+                    'payload' => \Illuminate\Support\Facades\Session::get('_token'),
                     'user' => json_encode($responseJson),
                     'last_activity' => time(),
-                    'created_at' => now(),
-                    'updated_at' => now(),
+                    'created_at' => \Carbon\Carbon::now(),
+                    'updated_at' => \Carbon\Carbon::now(),
                 ]);
 
-                return response()->json([
+                return \Illuminate\Support\Facades\Response::json([
                     'message' => 'Login successful',
                     'access_token' => $accessToken,
                     'expires_in' => $expiresIn,
@@ -267,15 +234,16 @@ final class LoginClass
                 ]);
             }
         } catch (\Exception $e) {
-            return response()->json([
+            return \Illuminate\Support\Facades\Response::json([
                 'message' => 'Authentication error: ' . $e->getMessage(),
             ], 500);
         }
     }
 
 
-    public function sendToken(Request $request){
-        $parameters = request()->all();
+    public function sendToken(Request $request)
+    {
+        $parameters = $request()->all();
         $accessToken = $request->socialiteUser['accessToken'];
         $expiresIn = $request->socialiteUser['expiresOn'];
         $gtamUrl = $parameters['URL'] ?? '/';
@@ -290,48 +258,48 @@ final class LoginClass
         // Send the logout request to the external API
         $response = Http::withHeaders($headers)->post($url);
 
+
         if ($response->successful()) {
-            // $responseBody = $response->body();
             $responseJson = $response->json();
 
-            $jsonString = json_encode($responseJson);
+            $userObject = $responseJson['user'];
+            $token = $responseJson['access_token'];
+            $userId = $userObject['UserId'];
 
             $request->session()->regenerate();
-            $request->session()->put('user', json_encode($responseJson[0]));
-            $request->session()->put('user_id', $responseJson[0]['UserId']);
-            $request->session()->put('newRoute', route('azure.login'));
+            $request->session()->put('token', $token);
+            $request->session()->put('user', is_array($userObject) ? json_encode($userObject) : $userObject);
+            $request->session()->put('user_id', $userId);
+            $request->session()->put('newRoute',  value: \Illuminate\Support\Facades\Route::route('azure.login'));
 
             $sessionId = $request->session()->getId();
-            $payload = $request->session()->get('_token');
-            $userSession = $request->session()->get('user');
-            $user = $jsonString;
             $lastActivity = time();
 
             DB::table('custom_sessions')->insert([
                 'id' => $sessionId,
-                'user_id' => $responseJson[0]['UserId'],
-                'payload' => $payload,
-                'user' => $userSession,
+                'user_id' => $userId,
+                'payload' => $token,
+                'user' => is_array($userObject) ? json_encode($userObject) : $userObject,
                 'last_activity' => $lastActivity,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at' => \Carbon\Carbon::now(),
+                'updated_at' => \Carbon\Carbon::now(),
             ]);
             $request->session()->save();
 
-            return response()->json([
+            return \Illuminate\Support\Facades\Response::json([
                 'message' => 'Login successful',
                 'access_token' => $accessToken,
                 'expires_in' => $expiresIn,
-                'user' => $user,
+                'user' => is_array($userObject) ? json_encode($userObject) : $userObject,
             ]);
         } else {
-            if(str_contains($response->json()['Message'], 'Error while validating token: Code: InvalidAuthenticationToken')) {
-                return response()->json([
+            if (str_contains($response->json()['Message'], 'Error while validating token: Code: InvalidAuthenticationToken')) {
+                return \Illuminate\Support\Facades\Response::json([
                     'Message' =>  'Error while validating token: Invalid Authentication Token',
                     'error' =>  $response->json(),
                 ], 500);
-            }else{
-                return response()->json([
+            } else {
+                return \Illuminate\Support\Facades\Response::json([
                     'Message' =>  $response->json()['Message'] ?? 'Authentication error',
                     'error' =>  $response->json(),
                 ], 500);

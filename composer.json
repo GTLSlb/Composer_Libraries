@@ -15,5 +15,7 @@
         }
     },
     "require": {
+        "illuminate/http": "^12.21",
+        "laravel/socialite": "^5.23"
     }
 }
