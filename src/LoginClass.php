@@ -19,7 +19,7 @@ final class LoginClass
 
     public static function login(Request $request)
     {
-        $parameters = $request()->all();
+        $parameters = request()->all();
         $sessionDomain = $parameters['SessionDomain'] ?? '/';
         $userObjectDecode = is_string($parameters['UserObject']) ? json_decode($parameters['UserObject'], true) : $parameters['UserObject'];
         $userObject = is_array($userObjectDecode) ? $userObjectDecode : [$userObjectDecode]; // Check if the decoded value is an array or a json
@@ -70,7 +70,7 @@ final class LoginClass
 
     public function logout(Request $request)
     {
-        $parameters = $request()->all();
+        $parameters = request()->all();
         $sessionDomain = $parameters['SessionDomain'] ?? '';
         $user = $parameters['CurrentUser'];
         $url = $parameters['URL'];
@@ -188,7 +188,7 @@ final class LoginClass
 
     public function handleCallback(Request $request)
     {
-        $parameters = $request()->all();
+        $parameters = request()->all();
         $redirectRoute = $parameters['RedirectRoute'] ?? '/';
         $gtamUrl = $parameters['URL'] ?? '/';
 
@@ -243,7 +243,7 @@ final class LoginClass
 
     public function sendToken(Request $request)
     {
-        $parameters = $request()->all();
+        $parameters = request()->all();
         $accessToken = $request->socialiteUser['accessToken'];
         $expiresIn = $request->socialiteUser['expiresOn'];
         $gtamUrl = $parameters['URL'] ?? '/';
@@ -270,7 +270,7 @@ final class LoginClass
             $request->session()->put('token', $token);
             $request->session()->put('user', is_array($userObject) ? json_encode($userObject) : $userObject);
             $request->session()->put('user_id', $userId);
-            $request->session()->put('newRoute',  value: \Illuminate\Support\Facades\Route::route('azure.login'));
+            $request->session()->put('newRoute',  value: route('azure.login'));
 
             $sessionId = $request->session()->getId();
             $lastActivity = time();
