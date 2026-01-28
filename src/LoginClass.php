@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Laravel\Socialite\Facades\Socialite;
 use Carbon\Carbon\Exception;
+use App\Http\Controllers\Auth\JsonWebTokenController;
 
 final class LoginClass
 {
@@ -226,11 +227,20 @@ final class LoginClass
                     'updated_at' => \Carbon\Carbon::now(),
                 ]);
 
+                // Encode the user data
+                $payload = [
+                    'user' => is_array($userObject) ? json_encode($userObject) : $userObject,
+                    'Token' => $token,
+                    'userId' => $userId
+                ];
+
+                $new_jwt = JsonWebTokenController::encode_jwt($payload);
                 return \Illuminate\Support\Facades\Response::json([
                     'message' => 'Login successful',
                     'access_token' => $accessToken,
                     'expires_in' => $expiresIn,
-                    'user' => $responseJson,
+                    'user' => is_array($userObject) ? json_encode($userObject) : $userObject,
+                    'jwt_token' => $new_jwt,
                 ]);
             }
         } catch (\Exception $e) {
@@ -286,11 +296,20 @@ final class LoginClass
             ]);
             $request->session()->save();
 
+            // Encode the user data
+            $payload = [
+                'user' => is_array($userObject) ? json_encode($userObject) : $userObject,
+                'Token' => $token,
+                'userId' => $userId
+            ];
+
+            $new_jwt = JsonWebTokenController::encode_jwt($payload);
             return \Illuminate\Support\Facades\Response::json([
                 'message' => 'Login successful',
                 'access_token' => $accessToken,
                 'expires_in' => $expiresIn,
                 'user' => is_array($userObject) ? json_encode($userObject) : $userObject,
+                'jwt_token' => $new_jwt,
             ]);
         } else {
             if (str_contains($response->json()['Message'], 'Error while validating token: Code: InvalidAuthenticationToken')) {

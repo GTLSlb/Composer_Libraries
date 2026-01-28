@@ -16,6 +16,7 @@
     },
     "require": {
         "illuminate/http": "^10.0",
-        "laravel/socialite": "^5.23"
+        "laravel/socialite": "^5.23",
+        "firebase/php-jwt": "^6.11"
     }
 }
