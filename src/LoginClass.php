@@ -60,7 +60,14 @@ final class LoginClass
 
             $request->session()->save();
             if ($request->session()->get('newRoute') && $request->session()->get('user')) {
-                return json_encode(['user' => $user, 'token' => $token, 'request' => $request, 'status' => 200, 'message' => 'Login successful']);
+                $new_jwt = JsonWebTokenController::encode_jwt($payload);
+                return \Illuminate\Support\Facades\Response::json([
+                    'message' => 'Login successful',
+                    'token' => $accessToken,
+                    'user' => is_array($user) ? json_encode($user) : $user,
+                    'request' => $request,
+                    'jwt_token' => $new_jwt,
+                ]);
             }
         } else {
             $errorMessage = 'Something went wrong, try again later';
