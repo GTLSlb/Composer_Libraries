@@ -11,7 +11,7 @@ use Firebase\JWT\ExpiredException;
 class JsonWebTokenController extends Controller {
         public static function decode_jwt_valid($jwt_token)
     {
-        $secretKey = "2zX!8fD@qY6k#eT^mP9w$Jr1&uV5g*Bf3";
+        $secretKey = '2zX!8fD@qY6k#eT^mP9w$Jr1&uV5g*Bf3';
         $allowed_algs = ['HS256'];
         $currentTime = time();
 
@@ -59,7 +59,7 @@ class JsonWebTokenController extends Controller {
     public static function encode_jwt($payload) {
         $allowed_algs = 'HS256';
 
-        $secretKey = "2zX!8fD@qY6k#eT^mP9w$Jr1&uV5g*Bf3";
+        $secretKey = '2zX!8fD@qY6k#eT^mP9w$Jr1&uV5g*Bf3';
         $token = JWT::encode($payload, $secretKey, $allowed_algs);
 
         return $token;
